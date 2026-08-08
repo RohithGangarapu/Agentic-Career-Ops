@@ -1,0 +1,14 @@
+# Python environments
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Local environment variables
+.env
+
+# Application output and data
+.career_ops/
+
+# macOS
+.DS_Store
