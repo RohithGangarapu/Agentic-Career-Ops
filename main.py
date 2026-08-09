@@ -142,7 +142,6 @@ def main():
                 if "datePosted" in page.url or "past-24h" in page.url:
                     print("✅ Verified 'Past 24 hours' filter is active based on URL.")
                 else:
-                    print("⚠️ Could not verify filter from URL. Attempting UI verification...")
                     print("URL:", page.url)
                     
             except PlaywrightTimeoutError as e:
@@ -169,9 +168,8 @@ def main():
             print(f"Targeting up to {args.max_posts} posts...")
             
             while len(raw_posts) < args.max_posts and no_new_content_count < MAX_NO_CONTENT:
-                # Find all posts currently rendered
-                # Added [data-view-name="feed-full-update"] for the latest LinkedIn UI
-                post_elements = page.locator('div[data-view-name="feed-full-update"], div[data-urn], div.feed-shared-update-v2, li.search-results__list-item, .reusable-search__result-container, div[data-id], .search-result__occluded-item, main ul > li').all()
+                # Use highly robust locators to catch any post container, even if classes are obfuscated
+                post_elements = page.locator('div[data-view-name="feed-full-update"], div[data-urn], div.feed-shared-update-v2, li.search-results__list-item, .reusable-search__result-container, main ul > li, [data-testid="expandable-text-box"], div.update-components-text, span.break-words').all()
                 
                 new_posts_in_this_scroll = 0
                 for el in post_elements:
@@ -179,7 +177,9 @@ def main():
                         # Try to get stable identifier
                         urn = el.get_attribute("data-urn") or el.get_attribute("data-id")
                         
-                        text = el.inner_text().strip()
+                        # Use text_content() instead of inner_text() to prevent Playwright from freezing/hanging on visually hidden elements!
+                        text = el.text_content().strip() if el.text_content() else ""
+                        
                         if not text or len(text) < 50:
                             continue # Too short, probably not a full post
                             
