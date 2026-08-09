@@ -1,6 +1,6 @@
 from typing import TypedDict, List, Optional
 from langgraph.graph import StateGraph, START, END
-from extractor import extract_contact_info, extract_structured_data
+from extractor import extract_structured_data
 
 class ExtractionState(TypedDict):
     raw_text: str
@@ -13,10 +13,6 @@ class ExtractionState(TypedDict):
     experience: Optional[str]
     jd: Optional[str]
 
-def extract_contacts_node(state: ExtractionState):
-    contacts = extract_contact_info(state["raw_text"])
-    return {"emails": contacts["emails"], "phones": contacts["phones"], "links": contacts["links"]}
-
 def extract_structured_node(state: ExtractionState):
     structured = extract_structured_data(state["raw_text"])
     return {
@@ -24,16 +20,17 @@ def extract_structured_node(state: ExtractionState):
         "designation": structured.get("designation"),
         "location": structured.get("location"),
         "experience": structured.get("experience"),
-        "jd": structured.get("jd")
+        "jd": structured.get("jd"),
+        "emails": structured.get("emails", []),
+        "phones": structured.get("phones", []),
+        "links": structured.get("links", [])
     }
 
 # Build LangGraph
 workflow = StateGraph(ExtractionState)
-workflow.add_node("extract_contacts", extract_contacts_node)
 workflow.add_node("extract_structured", extract_structured_node)
 
-workflow.add_edge(START, "extract_contacts")
-workflow.add_edge("extract_contacts", "extract_structured")
+workflow.add_edge(START, "extract_structured")
 workflow.add_edge("extract_structured", END)
 
 app = workflow.compile()

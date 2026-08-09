@@ -1,33 +1,16 @@
-# Project State: LinkedIn Career-Ops Collector
+# Project State: LinkedIn Career-Ops Pipeline
 
-## Current Phase: 7 (Final Phase)
-**Status:** COMPLETE
+## Current Phase: COMPLETE
+**Status:** FINISHED
 
-### Completed Work (Phase 7)
-- Created `exporter.py` utilizing `openpyxl` to generate a professional `.xlsx` file from the normalized JSON output.
-- Configured column widths to auto-adjust and capped the maximum width to keep Job Descriptions readable.
-- Integrated the exporter into `main.py` directly after Phase 6.
-- Final output is saved cleanly to `.career_ops/exports/`.
+### Completed Work (Phases 1-6)
+- **State Tracking**: `state_manager.py` manages lifecycle status.
+- **Resume Parsing**: Parses and caches the `master_resume.pdf`.
+- **JD Matching**: Securely cross-references JD with Resume via LLM.
+- **Cover Letter Generation**: `cover_letter.py` generates customized letters with genuine candidate info.
+- **Email Workflow**: `email_sender.py` drafts ultra-concise email pitches. Attempts to send the email via SMTP with the PDF resume attached.
+- **WhatsApp Workflow**: `whatsapp.py` crafts very short, conversational outreach messages optimized for mobile reading. It prepares a `wa.me` URL so you can easily review and send it manually.
+- **End-to-End Orchestration**: A single command now fetches new LinkedIn posts, extracts data, matches skills, writes the cover letter, drafts/sends the email, and prepares the WhatsApp message — tracking state seamlessly.
 
-### Final Architecture / Repository State
-- Python virtual environment is set up and active.
-- Dependencies installed: `playwright`, `langgraph`, `langchain-openai`, `pydantic`, `python-dotenv`, `openpyxl`.
-- Core orchestration (`main.py`) successfully handles end-to-end processing: Browser login (manual memory) -> Search Navigation -> Filter Applier -> Post Extraction -> LangGraph LLM Extraction -> Data Normalization -> XLSX Export.
-- Data directory structure:
-  - `.career_ops/browser_profile/`: Playwright persistent state (login sessions).
-  - `.career_ops/raw/`: Scraped raw text and URNs.
-  - `.career_ops/structured/`: Unvalidated LLM output.
-  - `.career_ops/normalized/`: Flattened and standardized JSON output.
-  - `.career_ops/exports/`: Final `.xlsx` spreadsheet files.
-
-### Files Created / Modified
-- `requirements.txt`
-- `main.py`
-- `extractor.py`
-- `workflow.py`
-- `normalizer.py`
-- `exporter.py`
-- `PROJECT_STATE.md`
-
-### Project Completion
-The LinkedIn Career-Ops Collector is officially complete! It fully automates the workflow of capturing recent LinkedIn job posts and converting them into structured recruitment leads via LLM processing.
+### Commands
+- Run Pipeline: `python main.py --designation "Python Developer Hiring" --max-posts 2`

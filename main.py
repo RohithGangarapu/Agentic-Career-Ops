@@ -305,7 +305,13 @@ def main():
                 export_to_xlsx(normalized_posts, export_filepath)
                 
                 print(f"✅ Saved XLSX file to: {export_filepath.absolute()}")
-                print("\nPhase 7 completed successfully! Pipeline finished.")
+                print("\nPhase 7 completed successfully!")
+                
+                print("\nPhase 8: Career-Ops Downstream Pipeline...")
+                from workflows.career_pipeline import run_pipeline
+                run_pipeline(export_filepath)
+                
+                print("\nAll pipeline phases finished successfully.")
         
         print("\nBrowser profile is saved to:", BROWSER_PROFILE_DIR.absolute())
         time.sleep(2)
