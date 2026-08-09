@@ -55,11 +55,16 @@ def generate_email_draft(company: str, designation: str, recruiter: str, candida
     draft = structured_llm.invoke([HumanMessage(content=prompt)])
     return draft
 
-def send_email(to_email: str, draft: EmailDraft, resume_path: str = "assets/resume/ROHITH_RESUME.pdf") -> bool:
+def send_email(to_email: str, draft: EmailDraft, resume_path: str = None) -> bool:
     """Sends the email via SMTP."""
     # If multiple emails are provided, take the first one
     if "," in to_email:
         to_email = to_email.split(",")[0].strip()
+        
+    if resume_path is None:
+        from outreach.resume_parser import get_resume_path
+        found_path = get_resume_path()
+        resume_path = str(found_path) if found_path else None
         
     smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))

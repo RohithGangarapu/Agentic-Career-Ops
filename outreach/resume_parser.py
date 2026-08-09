@@ -16,13 +16,23 @@ class StructuredResume(BaseModel):
     projects: List[str]
     certifications: List[str]
 
+def get_resume_path() -> Optional[Path]:
+    """Dynamically finds the first PDF in the assets/resume directory."""
+    resume_dir = Path("assets/resume")
+    if not resume_dir.exists():
+        return None
+    pdfs = list(resume_dir.glob("*.pdf"))
+    if not pdfs:
+        return None
+    return pdfs[0]
+
 def load_master_resume(force_reprocess: bool = False) -> StructuredResume:
     """Loads, extracts, and structures text from the master resume PDF."""
-    resume_path = Path("assets/resume/ROHITH_RESUME.pdf")
+    resume_path = get_resume_path()
     structured_path = Path("assets/resume/structured_resume.json")
     
-    if not resume_path.exists():
-        raise FileNotFoundError(f"Master resume not found at {resume_path.absolute()}")
+    if not resume_path or not resume_path.exists():
+        raise FileNotFoundError("No PDF resume found in assets/resume/ directory. Please place your resume there.")
         
     # Reuse cached structured resume if available
     if structured_path.exists() and not force_reprocess:

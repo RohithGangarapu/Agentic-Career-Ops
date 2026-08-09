@@ -52,11 +52,16 @@ def generate_whatsapp_draft(company: str, designation: str, recruiter: str, cand
     draft = structured_llm.invoke([HumanMessage(content=prompt)])
     return draft
 
-def send_whatsapp(phone_number: str, draft: WhatsAppDraft, resume_path: str = "assets/resume/ROHITH_RESUME.pdf") -> bool:
+def send_whatsapp(phone_number: str, draft: WhatsAppDraft, resume_path: str = None) -> bool:
     """
     Automates sending the WhatsApp message using Mac native commands (no extra libraries required).
     It also attempts to attach the resume by copying it to the clipboard and pasting it.
     """
+    if resume_path is None:
+        from outreach.resume_parser import get_resume_path
+        found_path = get_resume_path()
+        resume_path = str(found_path) if found_path else None
+
     # If multiple phones are provided, take the first one
     if "," in phone_number:
         phone_number = phone_number.split(",")[0]

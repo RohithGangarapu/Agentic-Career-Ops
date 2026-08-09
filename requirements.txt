@@ -9,3 +9,4 @@ langgraph>=0.0.26
 langchain-openai>=0.0.8
 pydantic>=2.6.0
 python-dotenv>=1.0.1
+PyMuPDF
