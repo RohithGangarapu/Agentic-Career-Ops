@@ -33,7 +33,8 @@ def get_llm():
         model=model,
         api_key=api_key,
         base_url="https://openrouter.ai/api/v1",
-        temperature=0
+        temperature=0,
+        max_tokens=2000
     )
 
 def extract_structured_data(text: str) -> dict:

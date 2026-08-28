@@ -26,7 +26,7 @@ def match_job_to_resume(job_designation: str, job_description: str, company: str
         model=os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct"),
         api_key=os.getenv("OPENROUTER_API_KEY"),
         base_url="https://openrouter.ai/api/v1",
-        max_tokens=800,
+        max_tokens=2000,
         temperature=0
     )
     
