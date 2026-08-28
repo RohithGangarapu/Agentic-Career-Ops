@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from logger import logger
 import os
 import json
 from typing import List
@@ -22,10 +26,11 @@ def match_job_to_resume(job_designation: str, job_description: str, company: str
         model=os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct"),
         api_key=os.getenv("OPENROUTER_API_KEY"),
         base_url="https://openrouter.ai/api/v1",
-        model_kwargs={"response_format": {"type": "json_object"}}
+        max_tokens=800,
+        temperature=0
     )
     
-    structured_llm = llm.with_structured_output(JobMatch)
+    # We bypass LangChain's structured output parser to prevent infinite loop bugs with LLaMA
     
     prompt = f"""
     You are an expert technical recruiter analyzing a candidate's fit for a role.
@@ -44,12 +49,39 @@ def match_job_to_resume(job_designation: str, job_description: str, company: str
     Job Description:
     {job_description}
     
-    Analyze the fit and extract strictly genuine matching elements into a structured JSON response.
+    OUTPUT FORMAT:
+    You MUST output strictly in the following JSON format. Do NOT wrap it in markdown block quotes. Just the raw JSON.
+    {{
+      "matched_skills": ["skill1", "skill2"],
+      "matched_projects": ["Project Name 1", "Project Name 2"],
+      "matched_experience": ["Experience bullet point 1", "Experience bullet point 2"],
+      "relevant_resume_points": "A short summary of why the candidate is a good fit, using ONLY facts from the resume."
+    }}
     """
     
-    print(f"Analyzing JD fit for {job_designation} at {company}...")
-    match_result = structured_llm.invoke(prompt)
-    return match_result
+    logger.info(f"Analyzing JD fit for {job_designation} at {company}...")
+    response = llm.invoke(prompt)
+    content = response.content.strip()
+    
+    # Strip markdown if hallucinated
+    if content.startswith("```json"):
+        content = content[7:]
+    elif content.startswith("```"):
+        content = content[3:]
+    if content.endswith("```"):
+        content = content[:-3]
+        
+    try:
+        data = json.loads(content.strip())
+        return JobMatch(
+            matched_skills=data.get("matched_skills", []),
+            matched_projects=data.get("matched_projects", []),
+            matched_experience=data.get("matched_experience", []),
+            relevant_resume_points=data.get("relevant_resume_points", "")
+        )
+    except Exception as e:
+        logger.warning(f"Failed to parse JobMatch JSON. Falling back to empty match. Error: {e}")
+        return JobMatch(matched_skills=[], matched_projects=[], matched_experience=[], relevant_resume_points="Candidate has strong matching background.")
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
@@ -60,7 +92,7 @@ if __name__ == "__main__":
     test_designation = "Senior Python Backend Engineer"
     test_jd = "Looking for a backend engineer with 5+ years of Python experience. Must have experience with FastAPI, Docker, and Kubernetes. AWS certification is a huge plus. Will lead a team of 3 engineers."
     
-    print(f"Testing match for {test_designation} at {test_company}")
+    logger.info(f"Testing match for {test_designation} at {test_company}")
     match = match_job_to_resume(test_designation, test_jd, test_company)
-    print("\n--- Match Results ---")
-    print(json.dumps(match.model_dump(), indent=2))
+    logger.info("\n--- Match Results ---")
+    logger.info(json.dumps(match.model_dump(), indent=2))

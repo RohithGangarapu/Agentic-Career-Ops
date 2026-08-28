@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from logger import logger
 import os
 import time
 import urllib.parse
@@ -16,10 +20,11 @@ def generate_whatsapp_draft(company: str, designation: str, recruiter: str, cand
         model=os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct"),
         api_key=os.getenv("OPENROUTER_API_KEY"),
         base_url="https://openrouter.ai/api/v1",
-        model_kwargs={"response_format": {"type": "json_object"}}
+        max_tokens=500,
+        temperature=0
     )
     
-    structured_llm = llm.with_structured_output(WhatsAppDraft)
+    # We use base llm without structured output to prevent LLaMA JSON hallucination loops
     
     recruiter_greeting = f"Hi {recruiter}," if recruiter and recruiter.lower() not in ["unknown", "none"] else "Hi there,"
     
@@ -45,12 +50,27 @@ def generate_whatsapp_draft(company: str, designation: str, recruiter: str, cand
     4. Provide a gentle call-to-action (e.g., offering to share your resume if they're open to chatting).
     5. Sign off with your name: {candidate_name}.
     
-    Output strictly as a structured JSON with 'message'.
+    OUTPUT FORMAT:
+    You MUST output strictly in the following format. Do not include markdown blocks or any conversational text.
+    
+    MESSAGE:
+    [Your short message here]
     """
     
-    print(f"Drafting WhatsApp message for {designation} at {company}...")
-    draft = structured_llm.invoke([HumanMessage(content=prompt)])
-    return draft
+    logger.info(f"Drafting WhatsApp message for {designation} at {company}...")
+    response = llm.invoke([HumanMessage(content=prompt)])
+    content = response.content.strip()
+    
+    msg = content
+    if "MESSAGE:" in content:
+        msg = content.split("MESSAGE:", 1)[1].strip()
+        
+    if msg.startswith("```"):
+        msg = msg.split("```")[1]
+        if msg.startswith("json"):
+            msg = msg[4:]
+            
+    return WhatsAppDraft(message=msg.strip())
 
 def send_whatsapp(phone_number: str, draft: WhatsAppDraft, resume_path: str = None) -> bool:
     """
@@ -76,15 +96,15 @@ def send_whatsapp(phone_number: str, draft: WhatsAppDraft, resume_path: str = No
         clean_phone = "+" + clean_phone
 
     if len(clean_phone) < 11:
-        print(f"⚠️ Invalid phone number length for {phone_number}. Skipping WhatsApp automation.")
+        logger.info(f"⚠️ Invalid phone number length for {phone_number}. Skipping WhatsApp automation.")
         return False
         
-    print("\n" + "="*40)
-    print(f"📱 AUTOMATING WHATSAPP MESSAGE TO {clean_phone}")
-    print("="*40)
-    print(draft.message)
-    print(f"📎 Attempting to attach resume: {resume_path}")
-    print("="*40 + "\n")
+    logger.info("\n" + "="*40)
+    logger.info(f"📱 AUTOMATING WHATSAPP MESSAGE TO {clean_phone}")
+    logger.info("="*40)
+    logger.info(draft.message)
+    logger.info(f"📎 Attempting to attach resume: {resume_path}")
+    logger.info("="*40 + "\n")
     
     try:
         # 1. Copy the resume file to the Mac clipboard
@@ -93,13 +113,13 @@ def send_whatsapp(phone_number: str, draft: WhatsAppDraft, resume_path: str = No
             copy_script = f'set the clipboard to POSIX file "{abs_resume_path}"'
             subprocess.run(["osascript", "-e", copy_script])
         else:
-            print(f"⚠️ Resume not found at {abs_resume_path}. Proceeding without attachment.")
+            logger.info(f"⚠️ Resume not found at {abs_resume_path}. Proceeding without attachment.")
 
         # 2. Encode the message for URL
         encoded_message = urllib.parse.quote(draft.message)
         
         # 3. Open URL
-        print("Opening WhatsApp... Please do not touch your keyboard or mouse...")
+        logger.info("Opening WhatsApp... Please do not touch your keyboard or mouse...")
         whatsapp_url = f"whatsapp://send?phone={clean_phone}&text={encoded_message}"
         
         # Try to open the Desktop app first
@@ -129,10 +149,10 @@ def send_whatsapp(phone_number: str, draft: WhatsAppDraft, resume_path: str = No
             # 6. Press 'Enter' again to send the attachment
             subprocess.run(["osascript", "-e", enter_script])
         
-        print("✅ WhatsApp message & resume automated successfully.")
+        logger.info("✅ WhatsApp message & resume automated successfully.")
         return True
     except Exception as e:
-        print(f"❌ Failed to automate WhatsApp message: {e}")
+        logger.info(f"❌ Failed to automate WhatsApp message: {e}")
         return False
 
 if __name__ == "__main__":
@@ -146,5 +166,5 @@ if __name__ == "__main__":
         relevant_resume_points="5 years Python, building microservices"
     )
     draft = generate_whatsapp_draft("Google", "Python Developer", "Sundar", "John Doe", test_match)
-    print(draft.message)
+    logger.info(draft.message)
     # send_whatsapp("+911234567890", draft)

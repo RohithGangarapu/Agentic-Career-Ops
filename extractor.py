@@ -1,3 +1,4 @@
+from logger import logger
 import os
 import re
 from typing import List, Optional
@@ -60,7 +61,7 @@ def extract_structured_data(text: str) -> dict:
             "links": result.links if result.links else []
         }
     except Exception as e:
-        print(f"LLM extraction error: {e}")
+        logger.info(f"LLM extraction error: {e}")
         return {"company": None, "designation": None, "location": None, "experience": None, "jd": None, "emails": [], "phones": [], "links": []}
 
 def extract_contact_info(text: str) -> dict:

@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from logger import logger
 import fitz
 import json
 import os
@@ -76,7 +80,7 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
     
-    print("Parsing master resume...")
+    logger.info("Parsing master resume...")
     profile = load_master_resume(force_reprocess=True)
-    print("--- Structured Resume Profile ---")
-    print(json.dumps(profile.model_dump(), indent=2))
+    logger.info("--- Structured Resume Profile ---")
+    logger.info(json.dumps(profile.model_dump(), indent=2))

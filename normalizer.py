@@ -1,3 +1,4 @@
+from logger import logger
 from typing import List, Optional, Any
 from pydantic import BaseModel, Field, field_validator
 
@@ -64,6 +65,6 @@ def normalize_posts(structured_posts: List[dict]) -> List[dict]:
             normalized_model = NormalizedPost(**raw_data)
             normalized_results.append(normalized_model.model_dump())
         except Exception as e:
-            print(f"⚠️ Error normalizing post {post.get('urn')}: {e}")
+            logger.info(f"⚠️ Error normalizing post {post.get('urn')}: {e}")
             
     return normalized_results

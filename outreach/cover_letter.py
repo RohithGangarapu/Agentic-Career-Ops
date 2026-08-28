@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from logger import logger
 import os
 from pathlib import Path
 from langchain_openai import ChatOpenAI
@@ -15,7 +19,9 @@ def generate_cover_letter(row_id: str, company: str, designation: str, recruiter
     llm = ChatOpenAI(
         model=os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct"),
         api_key=os.getenv("OPENROUTER_API_KEY"),
-        base_url="https://openrouter.ai/api/v1"
+        base_url="https://openrouter.ai/api/v1",
+        max_tokens=1500,
+        temperature=0.7
     )
     
     recruiter_greeting = f"Dear {recruiter}," if recruiter and recruiter.lower() not in ["unknown", "none"] else "Dear Hiring Team,"
@@ -53,7 +59,7 @@ def generate_cover_letter(row_id: str, company: str, designation: str, recruiter
     {candidate_name}
     """
     
-    print(f"Generating advanced cover letter for {designation} at {company}...")
+    logger.info(f"Generating advanced cover letter for {designation} at {company}...")
     response = llm.invoke([HumanMessage(content=prompt)])
     cover_letter_text = response.content.strip()
     
@@ -85,6 +91,6 @@ if __name__ == "__main__":
         job_match=test_match,
         candidate_name="John Doe"
     )
-    print(f"\n--- Advanced Cover Letter Saved to {path} ---")
+    logger.info(f"\n--- Advanced Cover Letter Saved to {path} ---")
     with open(path, "r") as f:
-        print(f.read())
+        logger.info(f.read())

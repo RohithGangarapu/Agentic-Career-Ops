@@ -1,3 +1,4 @@
+from logger import logger
 import os
 import sys
 import time
@@ -5,6 +6,9 @@ import json
 import datetime
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Project directories
 CAREER_OPS_DIR = Path(".career_ops")
@@ -40,11 +44,18 @@ def main():
     parser = argparse.ArgumentParser(description="Career-Ops LinkedIn Collector")
     parser.add_argument("--designation", type=str, help="Target designation to search for (e.g., 'Python Developer')")
     parser.add_argument("--max-posts", type=int, default=500, help="Maximum number of posts to collect")
+    parser.add_argument("--outreach-only", type=str, help="Path to an existing Excel file to resume outreach (skips scraping and extraction)")
     args = parser.parse_args()
     
     init_dirs()
     
-    print("Launching Playwright browser...")
+    if args.outreach_only:
+        logger.info(f"Resuming outreach pipeline directly from: {args.outreach_only}")
+        from workflows.career_pipeline import run_pipeline
+        run_pipeline(Path(args.outreach_only))
+        return
+    
+    logger.info("Launching Playwright browser...")
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
             user_data_dir=str(BROWSER_PROFILE_DIR),
@@ -54,75 +65,75 @@ def main():
         )
         
         page = context.new_page()
-        print("Navigating to LinkedIn...")
+        logger.info("Navigating to LinkedIn...")
         page.goto("https://www.linkedin.com/")
         
         if is_authenticated(page):
-            print("✅ Successfully detected authenticated LinkedIn session.")
+            logger.info("✅ Successfully detected authenticated LinkedIn session.")
         else:
-            print("⚠️ Not authenticated. Please log in manually.")
-            print("If you encounter a CAPTCHA or 2FA, please solve it in the browser.")
+            logger.info("⚠️ Not authenticated. Please log in manually.")
+            logger.info("If you encounter a CAPTCHA or 2FA, please solve it in the browser.")
             input("Press ENTER here in the terminal once you have successfully logged in... ")
             
             if is_authenticated(page):
-                print("✅ Successfully detected authenticated LinkedIn session after manual login.")
+                logger.info("✅ Successfully detected authenticated LinkedIn session after manual login.")
             else:
-                print("❌ Still not authenticated. Please run the script again and make sure you log in.")
+                logger.info("❌ Still not authenticated. Please run the script again and make sure you log in.")
                 context.close()
                 sys.exit(1)
                 
         if args.designation:
-            print(f"\nPhase 2: Searching for designation '{args.designation}'...")
+            logger.info(f"\nPhase 2: Searching for designation '{args.designation}'...")
             
             # Using the URL directly as it's the most robust way to search, 
             # but the prompt requires navigating via UI.
             # Actually, typing in the search box is required: "search designation"
-            print("Locating search box...")
+            logger.info("Locating search box...")
             try:
                 search_input = page.get_by_placeholder("Search").first
                 search_input.wait_for(state="visible", timeout=10000)
                 search_input.fill(args.designation)
                 search_input.press("Enter")
-                print("Search entered. Waiting for results to load...")
+                logger.info("Search entered. Waiting for results to load...")
                 time.sleep(5)  # Wait for the dynamic search to process
             except PlaywrightTimeoutError:
-                print("⚠️ Search box not found, falling back to direct URL navigation...")
+                logger.info("⚠️ Search box not found, falling back to direct URL navigation...")
                 encoded_designation = urllib.parse.quote(args.designation)
                 page.goto(f"https://www.linkedin.com/search/results/all/?keywords={encoded_designation}")
                 time.sleep(5)
             
-            print("Navigating to 'Posts' tab...")
+            logger.info("Navigating to 'Posts' tab...")
             posts_tab = page.locator('button, a, div[role="tab"]').filter(has_text="Posts").first
             try:
                 posts_tab.wait_for(state="visible", timeout=10000)
                 posts_tab.click()
-                print("✅ Clicked 'Posts' tab.")
+                logger.info("✅ Clicked 'Posts' tab.")
                 
                 # Wait for the Posts search results to load by checking the URL
                 page.wait_for_url("**/search/results/content/**", timeout=15000)
-                print("✅ Navigated to Posts search results.")
+                logger.info("✅ Navigated to Posts search results.")
                 time.sleep(3) # Let the posts page settle
             except PlaywrightTimeoutError:
-                print("⚠️ Could not find or click the 'Posts' tab via UI, or URL didn't update.")
-                print("Falling back to direct URL navigation to Posts...")
+                logger.info("⚠️ Could not find or click the 'Posts' tab via UI, or URL didn't update.")
+                logger.info("Falling back to direct URL navigation to Posts...")
                 encoded_designation = urllib.parse.quote(args.designation)
                 page.goto(f"https://www.linkedin.com/search/results/content/?keywords={encoded_designation}")
                 time.sleep(5)
                 
-            print("\nPhase 3: Applying 'Past 24 hours' filter...")
+            logger.info("\nPhase 3: Applying 'Past 24 hours' filter...")
             # Broaden locator to catch buttons or pills with the text Date posted
             date_posted_btn = page.locator('button, a, div[role="button"], .artdeco-pill').filter(has_text="Date posted").first
             try:
                 date_posted_btn.wait_for(state="visible", timeout=15000)
                 date_posted_btn.click()
-                print("✅ Opened 'Date posted' filter dropdown.")
+                logger.info("✅ Opened 'Date posted' filter dropdown.")
                 time.sleep(2)
                 
                 # Locate and click 'Past 24 hours' label, span, or radio button
                 past_24h = page.locator('label, span, div, button').filter(has_text="Past 24 hours").last
                 past_24h.wait_for(state="visible", timeout=10000)
                 past_24h.click()
-                print("✅ Selected 'Past 24 hours'.")
+                logger.info("✅ Selected 'Past 24 hours'.")
                 time.sleep(1)
                 
                 # Locate and click 'Show results' or 'Apply'
@@ -132,25 +143,25 @@ def main():
                 
                 if apply_btn.count() > 0:
                     apply_btn.click()
-                    print("✅ Clicked apply/show results.")
+                    logger.info("✅ Clicked apply/show results.")
                 else:
-                    print("⚠️ No explicit apply button found. Filter might auto-apply.")
+                    logger.info("⚠️ No explicit apply button found. Filter might auto-apply.")
                 
                 # Verify filter state by URL change or checking active filter
-                print("Waiting for page to update with filter...")
+                logger.info("Waiting for page to update with filter...")
                 time.sleep(5)
                 if "datePosted" in page.url or "past-24h" in page.url:
-                    print("✅ Verified 'Past 24 hours' filter is active based on URL.")
+                    logger.info("✅ Verified 'Past 24 hours' filter is active based on URL.")
                 else:
-                    print("URL:", page.url)
+                    logger.info(f"URL: {page.url}")
                     
             except PlaywrightTimeoutError as e:
-                print("❌ Failed to apply 'Past 24 hours' filter. Cannot safely proceed scraping unfiltered posts.")
-                print("Error Details:", e)
+                logger.info("❌ Failed to apply 'Past 24 hours' filter. Cannot safely proceed scraping unfiltered posts.")
+                logger.info(f"Error Details: {e}")
                 context.close()
                 sys.exit(1)
                 
-            print("\nPhase 4: Collecting Posts...")
+            logger.info("\nPhase 4: Collecting Posts...")
             RAW_DIR = CAREER_OPS_DIR / "raw"
             RAW_DIR.mkdir(exist_ok=True)
             
@@ -158,16 +169,28 @@ def main():
             try:
                 page.locator('[data-view-name="feed-full-update"], div[data-urn], div.feed-shared-update-v2').first.wait_for(state="visible", timeout=15000)
             except PlaywrightTimeoutError:
-                print("⚠️ Timed out waiting for posts to render. Proceeding anyway, but we might collect 0 posts.")
+                logger.info("⚠️ Timed out waiting for posts to render. Proceeding anyway, but we might collect 0 posts.")
             
             collected_urns = set()
             raw_posts = []
             no_new_content_count = 0
             MAX_NO_CONTENT = 3
             
-            print(f"Targeting up to {args.max_posts} posts...")
+            logger.info(f"Targeting up to {args.max_posts} posts...")
             
             while len(raw_posts) < args.max_posts and no_new_content_count < MAX_NO_CONTENT:
+                # Expand "see more" buttons to get full text before extracting
+                try:
+                    more_buttons = page.locator('button.see-more-text, button.feed-shared-inline-show-more-text__see-more-text, button:has-text("…see more"), button:has-text("see more")').all()
+                    for btn in more_buttons:
+                        try:
+                            if btn.is_visible():
+                                btn.click(timeout=1000, force=True, no_wait_after=True)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                
                 # Use highly robust locators to catch any post container, even if classes are obfuscated
                 post_elements = page.locator('div[data-view-name="feed-full-update"], div[data-urn], div.feed-shared-update-v2, li.search-results__list-item, .reusable-search__result-container, main ul > li, [data-testid="expandable-text-box"], div.update-components-text, span.break-words').all()
                 
@@ -210,17 +233,17 @@ def main():
                     except Exception:
                         pass # Ignore detached elements or other DOM errors during loop
                         
-                print(f"Collected {len(raw_posts)} posts so far (found {new_posts_in_this_scroll} new in this pass).")
+                logger.info(f"Collected {len(raw_posts)} posts so far (found {new_posts_in_this_scroll} new in this pass).")
                 
                 if new_posts_in_this_scroll == 0:
                     no_new_content_count += 1
-                    print(f"No new content found. Attempt {no_new_content_count}/{MAX_NO_CONTENT}")
+                    logger.info(f"No new content found. Attempt {no_new_content_count}/{MAX_NO_CONTENT}")
                     
                     if len(raw_posts) == 0 and no_new_content_count == 1:
                         debug_path = RAW_DIR / "debug_dom.html"
                         with open(debug_path, "w", encoding="utf-8") as f:
                             f.write(page.content())
-                        print(f"⚠️ Saved DOM to {debug_path} for debugging why 0 posts were found.")
+                        logger.info(f"⚠️ Saved DOM to {debug_path} for debugging why 0 posts were found.")
                 else:
                     no_new_content_count = 0
                     
@@ -240,20 +263,20 @@ def main():
                 
                 time.sleep(5) # Wait for new content to load
                 
-            print(f"\nFinished collection. Total valid posts collected: {len(raw_posts)}")
+            logger.info(f"\nFinished collection. Total valid posts collected: {len(raw_posts)}")
             
             if raw_posts:
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 raw_filepath = RAW_DIR / f"raw_posts_{timestamp}.json"
                 with open(raw_filepath, "w", encoding="utf-8") as f:
                     json.dump(raw_posts, f, indent=2, ensure_ascii=False)
-                print(f"Saved raw posts to: {raw_filepath.absolute()}")
+                logger.info(f"Saved raw posts to: {raw_filepath.absolute()}")
             else:
-                print("⚠️ No posts were collected.")
+                logger.info("⚠️ No posts were collected.")
         
-        print("\nPhase 4 completed successfully!")
+        logger.info("\nPhase 4 completed successfully!")
         
-        print("\nPhase 5: Extracting structured data...")
+        logger.info("\nPhase 5: Extracting structured data...")
         STRUCTURED_DIR = CAREER_OPS_DIR / "structured"
         STRUCTURED_DIR.mkdir(exist_ok=True)
         
@@ -262,15 +285,15 @@ def main():
             load_dotenv()
             
             if not os.getenv("OPENROUTER_API_KEY"):
-                print("⚠️ OPENROUTER_API_KEY not found in environment. Skipping LLM extraction Phase 5.")
-                print("Please add it to .env to enable structured extraction.")
+                logger.info("⚠️ OPENROUTER_API_KEY not found in environment. Skipping LLM extraction Phase 5.")
+                logger.info("Please add it to .env to enable structured extraction.")
             else:
                 from workflow import process_post
-                print(f"Extracting structured data from {len(raw_posts)} posts using LangGraph & OpenRouter...")
+                logger.info(f"Extracting structured data from {len(raw_posts)} posts using LangGraph & OpenRouter...")
                 
                 structured_posts = []
                 for i, rp in enumerate(raw_posts):
-                    print(f"Processing post {i+1}/{len(raw_posts)}...")
+                    logger.info(f"Processing post {i+1}/{len(raw_posts)}...")
                     structured_data = process_post(rp["text"])
                     combined = {**rp, **structured_data}
                     structured_posts.append(combined)
@@ -278,10 +301,10 @@ def main():
                 structured_filepath = STRUCTURED_DIR / f"structured_posts_{timestamp}.json"
                 with open(structured_filepath, "w", encoding="utf-8") as f:
                     json.dump(structured_posts, f, indent=2, ensure_ascii=False)
-                print(f"✅ Saved structured posts to: {structured_filepath.absolute()}")
-                print("\nPhase 5 completed successfully!")
+                logger.info(f"✅ Saved structured posts to: {structured_filepath.absolute()}")
+                logger.info("\nPhase 5 completed successfully!")
                 
-                print("\nPhase 6: Validating and Normalizing data...")
+                logger.info("\nPhase 6: Validating and Normalizing data...")
                 NORMALIZED_DIR = CAREER_OPS_DIR / "normalized"
                 NORMALIZED_DIR.mkdir(exist_ok=True)
                 
@@ -292,11 +315,11 @@ def main():
                 with open(normalized_filepath, "w", encoding="utf-8") as f:
                     json.dump(normalized_posts, f, indent=2, ensure_ascii=False)
                     
-                print(f"✅ Normalized {len(normalized_posts)} posts.")
-                print(f"✅ Saved normalized posts to: {normalized_filepath.absolute()}")
-                print("\nPhase 6 completed successfully!")
+                logger.info(f"✅ Normalized {len(normalized_posts)} posts.")
+                logger.info(f"✅ Saved normalized posts to: {normalized_filepath.absolute()}")
+                logger.info("\nPhase 6 completed successfully!")
                 
-                print("\nPhase 7: Exporting to Excel...")
+                logger.info("\nPhase 7: Exporting to Excel...")
                 EXPORTS_DIR = CAREER_OPS_DIR / "exports"
                 EXPORTS_DIR.mkdir(exist_ok=True)
                 
@@ -304,16 +327,16 @@ def main():
                 export_filepath = EXPORTS_DIR / f"linkedin_jobs_{timestamp}.xlsx"
                 export_to_xlsx(normalized_posts, export_filepath)
                 
-                print(f"✅ Saved XLSX file to: {export_filepath.absolute()}")
-                print("\nPhase 7 completed successfully!")
+                logger.info(f"✅ Saved XLSX file to: {export_filepath.absolute()}")
+                logger.info("\nPhase 7 completed successfully!")
                 
-                print("\nPhase 8: Career-Ops Downstream Pipeline...")
+                logger.info("\nPhase 8: Career-Ops Downstream Pipeline...")
                 from workflows.career_pipeline import run_pipeline
                 run_pipeline(export_filepath)
                 
-                print("\nAll pipeline phases finished successfully.")
+                logger.info("\nAll pipeline phases finished successfully.")
         
-        print("\nBrowser profile is saved to:", BROWSER_PROFILE_DIR.absolute())
+        logger.info(f"\nBrowser profile is saved to: {BROWSER_PROFILE_DIR.absolute()}")
         time.sleep(2)
         context.close()
 
